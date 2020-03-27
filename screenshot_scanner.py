@@ -17,6 +17,7 @@ ap.add_argument("-e", "--height", type=int, default=320,
                 help="nearest multiple of 32 for resized height")
 ap.add_argument("-p", "--padding", type=float, default=0.0,
                 help="amount of padding to add to each border of ROI")
+ap.add_argument("-r", "--ref", required=True, help="path to reference images directory")
 args = vars(ap.parse_args())
 
 #Initialize a rectangular and square structuring kernel
@@ -30,8 +31,38 @@ upper_blue = np.array([255, 150, 50], dtype = "uint8")
 lower_orange = np.array([0, 90, 200], dtype = "uint8")
 upper_orange = np.array([70, 160, 255], dtype = "uint8")
 
+
+# This function returns a player's status in the killfeed
+def player_in_killfeed(desc, name, x, y):
+    d = dict();
+    d['desc']   = desc
+    d['team']   = "" # atk/def? blue/orange? goodguys/badguys?
+    d['name']   = name
+    d['x']      = x
+    d['y']      = y
+    return d
+
+
+# This represents a kill/death and the associated information
+def killfeed_event(kill, death, scoreboard_readout):
+    d = dict();
+    d['kill']   = kill
+    d['death']  = death
+    d['scoreboard_readout']  = scoreboard_readout
+    return d
+
+
+# this represents the readout from the scoreboard
+def scoreboard_readout(time, orange_score, blue_score):
+    d = dict();
+    d['time']   = time
+    d['orange_score']  = orange_score
+    d['blue_score']  = blue_score
+    return d
+
+
 # isolate scoreboard from screenshot and return: Time in round, Match Score
-def read_scoreboard(input):
+def read_scoreboard(input, killfeed_events):
     isolate_scoreboard_start = datetime.datetime.now()
 
     #Isolate scoreboard location on a 1080p pic
@@ -40,9 +71,29 @@ def read_scoreboard(input):
     # cv2.imshow("roi", scoreboard)
     # cv2.waitKey(0)
 
+    left_symbol = input[65: 120, 805: 850]
+    left_symbol = cv2.cvtColor(left_symbol, cv2.COLOR_BGR2GRAY)
+    left_symbol = cv2.threshold(left_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
+    # cv2.imshow("left_symbol", left_symbol)
+    # cv2.waitKey(0)
+    left_result = cv2.matchTemplate(attackersymbol, left_symbol, cv2.TM_CCOEFF)
+    (_, left_score, _, _) = cv2.minMaxLoc(left_result)
+    # print("left symbol result: " + str(left_score))
+
+    right_symbol = input[60: 120, 1070: 1120]
+    right_symbol = cv2.cvtColor(right_symbol, cv2.COLOR_BGR2GRAY)
+    right_symbol = cv2.threshold(right_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
+    right_result = cv2.matchTemplate(attackersymbol, right_symbol, cv2.TM_CCOEFF)
+    # cv2.imshow("right_symbol", right_symbol)
+    # cv2.waitKey(0)
+    (_, right_score, _, _) = cv2.minMaxLoc(right_result)
+    # print("right symbol result: " + str(right_score))
+
     #greyscale
     roi_gray = cv2.cvtColor(clock, cv2.COLOR_BGR2GRAY)
     roi_gray = cv2.bitwise_not(roi_gray)
+    # cv2.imshow("roi_gray", roi_gray)
+    # cv2.waitKey(0)
 
     config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 8")
 
@@ -50,30 +101,24 @@ def read_scoreboard(input):
     time = pytesseract.image_to_string(roi_gray, config=config)
     pytess_end = datetime.datetime.now()
     pytess_diff= pytess_end-pytess_start;
-    print("time is " + time)
+    # print("time is " + time)
     # print("pytess time " + str(pytess_diff.microseconds))
 
     config = ("-l eng -c tessedit_char_whitelist=012345 --oem 1 --psm 10")
-    read_colormasked_areas(scoreboard, lower_orange, upper_orange, config, "orange score: ")
-    read_colormasked_areas(scoreboard, lower_blue, upper_blue, config, "blue score: ")
+    orange_score = read_colormasked_areas(scoreboard, lower_orange, upper_orange, config, "orange score: ")
+    blue_score = read_colormasked_areas(scoreboard, lower_blue, upper_blue, config, "blue score: ")
 
     isolate_scoreboard_end = datetime.datetime.now()
     total_func_time = isolate_scoreboard_end - isolate_scoreboard_start;
-    print("total func time " + str(total_func_time.microseconds))
+    # print("total func time " + str(total_func_time.microseconds))
+
+    return scoreboard_readout(time, orange_score, blue_score)
 
 
+# scan in numbers from scoreboard
 def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
-    # find the colors within the specified boundaries and apply
-    # the mask
-    mask_color = cv2.inRange(input_image, lower_color, upper_color)
-    # cv2.imshow("mask_color", mask_color)
-    # cv2.waitKey(0)
 
-    # find contours in the thresholded image, then initialize the
-    # list of digit locations
-    cnts = cv2.findContours(mask_color.copy(), cv2.RETR_EXTERNAL,
-                            cv2.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
+    cnts = find_color_contours(input_image, lower_color, upper_color)
 
     for (i, c) in enumerate(cnts):
         # compute the bounding box of the contour, then use the
@@ -82,9 +127,10 @@ def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
         ar = w / float(h)
         # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
         if w*h > 300:
-            color_img = mask_color[y-10:y+h+10, x-10:x+w+10]
+            color_img = input_image[y-10:y+h+10, x-10:x+w+10]
+            color_img = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
             color_img = cv2.adaptiveThreshold(color_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2)
-            # cv2.imshow("orange_score_img adaptivethresh", orange_score_img)
+            # cv2.imshow("orange_score_img adaptivethresh", color_img)
             # cv2.waitKey(0)
             color_img = cv2.dilate(color_img,kernel,iterations=1)
             color_img = cv2.GaussianBlur(color_img, (5, 5), 0)
@@ -96,36 +142,28 @@ def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
             pytess_end = datetime.datetime.now()
             pytess_diff= pytess_end-pytess_start;
             # print("color pytess time is " + str(pytess_diff.microseconds))
-            print(desc + color_text)
             if (color_text == ""):
                 print("missed reading!!! for " + desc)
+                continue
+            return color_text
 
 
+# scan in numbers from killfeed.
+# TODO: Will want to merge with read_colormasked_areas for readability at some point
 def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, config, desc):
 
+    # increase killfeed size for readability
     (origH, origW) = input_image.shape[:2]
-    # set the new width and height and then determine the ratio in change
-    # for both the width and height
-    (newW, newH) = (1280, 640)
-    rW = origW / float(newW)
-    rH = origH / float(newH)
-    # resize the image and grab the new image dimensions
-    input_image = cv2.resize(input_image, (newW, newH))
-    (H, W) = input_image.shape[:2]
+    # resize the width to be 1280 pixels and grab the new image dimensions
+    r = 1280.0 / origW
+    dim = (1280, int(origH * r))
+    input_image = cv2.resize(input_image, dim)
     # cv2.imshow("input_image", input_image)
     # cv2.waitKey(0)
 
-    # find the colors within the specified boundaries and apply
-    # the mask
-    mask_color = cv2.inRange(input_image, lower_color, upper_color)
-    # cv2.imshow("mask_color", mask_color)
-    # cv2.waitKey(0)
+    cnts = find_color_contours(input_image, lower_color, upper_color)
 
-    # find contours in the thresholded image, then initialize the
-    # list of digit locations
-    cnts = cv2.findContours(mask_color.copy(), cv2.RETR_EXTERNAL,
-                            cv2.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
+    players = []
 
     for (i, c) in enumerate(cnts):
         # compute the bounding box of the contour, then use the
@@ -143,23 +181,80 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
             # cv2.imshow("thresh", thresh)
             # cv2.waitKey(0)
 
-            text = pytesseract.image_to_string(thresh, config=config)
-            print(desc + text)
-            print(desc + " x value: " + str(x))
+            name = pytesseract.image_to_string(thresh, config=config)
+            # print(desc + name)
+            # print(desc + " x value: " + str(x) + ", y value: " + str(y))
+            player = player_in_killfeed(desc, name, x, y)
+            # add player to the list of players currently in the killfeed
+            players.append(player)
+
+    return players
+
+
+# finds contours for a given color. filter by aspect ratio and/or size
+def find_color_contours(input_image, lower_color, upper_color):
+    # find the colors within the specified boundaries and apply
+    # the mask
+    mask_color = cv2.inRange(input_image, lower_color, upper_color)
+    # cv2.imshow("mask_color", mask_color)
+    # cv2.waitKey(0)
+
+    # find contours in the thresholded image, then initialize the
+    # list of digit locations
+    cnts = cv2.findContours(mask_color.copy(), cv2.RETR_EXTERNAL,
+                            cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+
+    return cnts
+
 
 def read_kill_feed(input):
     kill_feed = input[250:450, 1520:1920]
     config = ("-l eng --oem 1 --psm 6")
-    read_colormasked_areas_killfeed(kill_feed, lower_orange, upper_orange, config, "orange player: ")
-    read_colormasked_areas_killfeed(kill_feed, lower_blue, upper_blue, config, "blue player: ")
+    blue_players = read_colormasked_areas_killfeed(kill_feed, lower_orange, upper_orange, config, "orange ")
+    orange_players = read_colormasked_areas_killfeed(kill_feed, lower_blue, upper_blue, config, "blue ")
 
+    return sort_kill_feed(blue_players, orange_players)
+
+
+# given two sets of players, orange and blue, sort them into who killed who
+def sort_kill_feed(blue_players, orange_players):
+    blue_players = sorted(blue_players, key = lambda i: i['y'])
+    orange_players = sorted(orange_players, key = lambda i: i['y'])
+
+    killfeed_events = []
+    for blue, orange in zip(blue_players, orange_players):
+        if blue['x'] < orange['x']:
+            kf = killfeed_event(blue, orange, "")
+            killfeed_events.append(kf)
+        else:
+            kf = killfeed_event(orange, blue, "")
+            killfeed_events.append(kf)
+
+    return killfeed_events
+
+
+for refPath in paths.list_images(args["ref"]):
+    # load image, resize, and convert to grayscale
+    ref = cv2.imread(refPath)
+    ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(ref, 180, 255, cv2.THRESH_BINARY_INV)[1]
+
+    attackersymbol = thresh
+    # cv2.imshow(refPath, thresh)
+    # cv2.waitKey(0)
 
 
 for imagePath in paths.list_images(args["images"]):
     # load image, resize, and convert to grayscale
     image = cv2.imread(imagePath)
     image = cv2.resize(image, (1920,1080))
-    # cv2.imshow(imagePath, image)
-    # cv2.waitKey(0)
-    read_kill_feed(image)
-    read_scoreboard(image)
+    cv2.imshow(imagePath, image)
+    cv2.waitKey(0)
+    killfeed_events = read_kill_feed(image)
+    scoreboard = read_scoreboard(image, killfeed_events)
+    for kf in killfeed_events:
+        kf['scoreboard_readout'] = scoreboard
+        print(kf['kill']['name'] + " on the " + kf['kill']['desc'] + "team killed " + kf['death']['name'] + " on the " +
+              kf['death']['desc'] + "team at " + kf['scoreboard_readout']['time'] + ", with the score of blue:" +
+              kf['scoreboard_readout']['blue_score'] + " vs orange:" + kf['scoreboard_readout']['orange_score'])
