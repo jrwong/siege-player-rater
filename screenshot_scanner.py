@@ -7,18 +7,18 @@ import cv2
 import datetime
 
 # construct the argument parse and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--images", required=True, help="path to images directory")
-ap.add_argument("-c", "--min-confidence", type=float, default=0.5,
-                help="minimum probability required to inspect a region")
-ap.add_argument("-w", "--width", type=int, default=320,
-                help="nearest multiple of 32 for resized width")
-ap.add_argument("-e", "--height", type=int, default=320,
-                help="nearest multiple of 32 for resized height")
-ap.add_argument("-p", "--padding", type=float, default=0.0,
-                help="amount of padding to add to each border of ROI")
-ap.add_argument("-r", "--ref", required=True, help="path to reference images directory")
-args = vars(ap.parse_args())
+# ap = argparse.ArgumentParser()
+# ap.add_argument("-i", "--images", required=True, help="path to images directory")
+# ap.add_argument("-c", "--min-confidence", type=float, default=0.5,
+#                 help="minimum probability required to inspect a region")
+# ap.add_argument("-w", "--width", type=int, default=320,
+#                 help="nearest multiple of 32 for resized width")
+# ap.add_argument("-e", "--height", type=int, default=320,
+#                 help="nearest multiple of 32 for resized height")
+# ap.add_argument("-p", "--padding", type=float, default=0.0,
+#                 help="amount of padding to add to each border of ROI")
+# ap.add_argument("-r", "--ref", required=True, help="path to reference images directory")
+# args = vars(ap.parse_args())
 
 #Initialize a rectangular and square structuring kernel
 rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
@@ -71,31 +71,32 @@ def read_scoreboard(input, killfeed_events):
     # cv2.imshow("roi", scoreboard)
     # cv2.waitKey(0)
 
-    left_symbol = input[65: 120, 805: 850]
-    left_symbol = cv2.cvtColor(left_symbol, cv2.COLOR_BGR2GRAY)
-    left_symbol = cv2.threshold(left_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
-    # cv2.imshow("left_symbol", left_symbol)
-    # cv2.waitKey(0)
-    left_result = cv2.matchTemplate(attackersymbol, left_symbol, cv2.TM_CCOEFF)
-    (_, left_score, _, _) = cv2.minMaxLoc(left_result)
-    # print("left symbol result: " + str(left_score))
-
-    right_symbol = input[60: 120, 1070: 1120]
-    right_symbol = cv2.cvtColor(right_symbol, cv2.COLOR_BGR2GRAY)
-    right_symbol = cv2.threshold(right_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
-    right_result = cv2.matchTemplate(attackersymbol, right_symbol, cv2.TM_CCOEFF)
-    # cv2.imshow("right_symbol", right_symbol)
-    # cv2.waitKey(0)
-    (_, right_score, _, _) = cv2.minMaxLoc(right_result)
-    # print("right symbol result: " + str(right_score))
+    # left_symbol = input[65: 120, 805: 850]
+    # left_symbol = cv2.cvtColor(left_symbol, cv2.COLOR_BGR2GRAY)
+    # left_symbol = cv2.threshold(left_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
+    # # cv2.imshow("left_symbol", left_symbol)
+    # # cv2.waitKey(0)
+    # left_result = cv2.matchTemplate(attackersymbol, left_symbol, cv2.TM_CCOEFF)
+    # (_, left_score, _, _) = cv2.minMaxLoc(left_result)
+    # # print("left symbol result: " + str(left_score))
+    #
+    # right_symbol = input[60: 120, 1070: 1120]
+    # right_symbol = cv2.cvtColor(right_symbol, cv2.COLOR_BGR2GRAY)
+    # right_symbol = cv2.threshold(right_symbol, 180, 255, cv2.THRESH_BINARY_INV)[1]
+    # right_result = cv2.matchTemplate(attackersymbol, right_symbol, cv2.TM_CCOEFF)
+    # # cv2.imshow("right_symbol", right_symbol)
+    # # cv2.waitKey(0)
+    # (_, right_score, _, _) = cv2.minMaxLoc(right_result)
+    # # print("right symbol result: " + str(right_score))
 
     #greyscale
+    # TODO: address red flashing numbers, address bomb timer
     roi_gray = cv2.cvtColor(clock, cv2.COLOR_BGR2GRAY)
-    roi_gray = cv2.bitwise_not(roi_gray)
+    (T, roi_gray) = cv2.threshold(roi_gray, 180, 255, cv2.THRESH_BINARY_INV)
     # cv2.imshow("roi_gray", roi_gray)
     # cv2.waitKey(0)
 
-    config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 8")
+    config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 7")
 
     pytess_start = datetime.datetime.now()
     time = pytesseract.image_to_string(roi_gray, config=config)
@@ -172,8 +173,8 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
         ar = w / float(h)
         # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
         if w*h > 5000 and ar > 2:
-            input_image = input_image[y:y+h, x+15:x+w-15]
-            person1 = cv2.cvtColor(input_image, cv2.COLOR_BGR2GRAY)
+            killfeed_roi = input_image[y:y+h, x+15:x+w-15]
+            person1 = cv2.cvtColor(killfeed_roi, cv2.COLOR_BGR2GRAY)
             # cv2.imshow("b2gray", person1)
             # cv2.waitKey(0)
             (T, thresh) = cv2.threshold(person1, 180, 255, cv2.THRESH_BINARY_INV)
@@ -209,52 +210,101 @@ def find_color_contours(input_image, lower_color, upper_color):
 
 
 def read_kill_feed(input):
-    kill_feed = input[250:450, 1520:1920]
-    config = ("-l eng --oem 1 --psm 6")
-    blue_players = read_colormasked_areas_killfeed(kill_feed, lower_orange, upper_orange, config, "orange ")
-    orange_players = read_colormasked_areas_killfeed(kill_feed, lower_blue, upper_blue, config, "blue ")
+    kill_feed = input[250:450, 1420:1920]
+    config = ("-l eng --oem 1 --psm 8")
+    orange_players = read_colormasked_areas_killfeed(kill_feed, lower_orange, upper_orange, config, "orange ")
+    blue_players = read_colormasked_areas_killfeed(kill_feed, lower_blue, upper_blue, config, "blue ")
 
     return sort_kill_feed(blue_players, orange_players)
 
 
 # given two sets of players, orange and blue, sort them into who killed who
 def sort_kill_feed(blue_players, orange_players):
-    blue_players = sorted(blue_players, key = lambda i: i['y'])
-    orange_players = sorted(orange_players, key = lambda i: i['y'])
 
+    # run some validation here to check against known players from scoreboard reading
+    players = blue_players
+    players.extend(orange_players)
+
+    players = sorted(players, key = lambda i: i['y'])
+
+    # loop through and check if previous y value is within range of the current player
+    # if so, then create a killfeed_event
+    # TODO: address Self destructs, "x found the bomb" lines
     killfeed_events = []
-    for blue, orange in zip(blue_players, orange_players):
-        if blue['x'] < orange['x']:
-            kf = killfeed_event(blue, orange, "")
+    prev_y_val = 0
+    prev_player = player_in_killfeed(None, None, None, None)
+    for player in players:
+        if player['y'] in range(prev_y_val-10, prev_y_val+10):
+            if prev_player['x'] < player['x']:
+                kf = killfeed_event(prev_player, player, "")
+            else:
+                kf = killfeed_event(player, prev_player, "")
             killfeed_events.append(kf)
-        else:
-            kf = killfeed_event(orange, blue, "")
-            killfeed_events.append(kf)
+        prev_player = player
+        prev_y_val = player['y']
 
     return killfeed_events
 
 
-for refPath in paths.list_images(args["ref"]):
-    # load image, resize, and convert to grayscale
-    ref = cv2.imread(refPath)
-    ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
-    thresh = cv2.threshold(ref, 180, 255, cv2.THRESH_BINARY_INV)[1]
+def check_kill_feed(input):
 
-    attackersymbol = thresh
-    # cv2.imshow(refPath, thresh)
-    # cv2.waitKey(0)
+    kill_feed = input[250:450, 1420:1920]
+
+    # increase killfeed size for readability
+    (origH, origW) = kill_feed.shape[:2]
+    # resize the width to be 1280 pixels and grab the new image dimensions
+    r = 1280.0 / origW
+    dim = (1280, int(origH * r))
+    kill_feed = cv2.resize(kill_feed, dim)
+
+    cnts = find_color_contours(kill_feed, lower_orange, upper_orange)
+    for (i, c) in enumerate(cnts):
+        # compute the bounding box of the contour, then use the
+        # bounding box coordinates to derive the aspect ratio
+        (x, y, w, h) = cv2.boundingRect(c)
+        ar = w / float(h)
+        # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
+        if w*h > 5000 and ar > 2:
+            return True
+
+    cnts = find_color_contours(kill_feed, lower_blue, upper_blue)
+    for (i, c) in enumerate(cnts):
+        # compute the bounding box of the contour, then use the
+        # bounding box coordinates to derive the aspect ratio
+        (x, y, w, h) = cv2.boundingRect(c)
+        ar = w / float(h)
+        # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
+        if w*h > 5000 and ar > 2:
+            return True
+
+    return False
 
 
-for imagePath in paths.list_images(args["images"]):
-    # load image, resize, and convert to grayscale
-    image = cv2.imread(imagePath)
-    image = cv2.resize(image, (1920,1080))
-    cv2.imshow(imagePath, image)
-    cv2.waitKey(0)
-    killfeed_events = read_kill_feed(image)
-    scoreboard = read_scoreboard(image, killfeed_events)
-    for kf in killfeed_events:
-        kf['scoreboard_readout'] = scoreboard
-        print(kf['kill']['name'] + " on the " + kf['kill']['desc'] + "team killed " + kf['death']['name'] + " on the " +
-              kf['death']['desc'] + "team at " + kf['scoreboard_readout']['time'] + ", with the score of blue:" +
-              kf['scoreboard_readout']['blue_score'] + " vs orange:" + kf['scoreboard_readout']['orange_score'])
+# for refPath in paths.list_images(args["ref"]):
+#     # load image, resize, and convert to grayscale
+#     ref = cv2.imread(refPath)
+#     ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
+#     thresh = cv2.threshold(ref, 180, 255, cv2.THRESH_BINARY_INV)[1]
+#
+#     attackersymbol = thresh
+#     # cv2.imshow(refPath, thresh)
+#     # cv2.waitKey(0)
+#
+#
+# for imagePath in paths.list_images(args["images"]):
+#     # load image, resize, and convert to grayscale
+#     image = cv2.imread(imagePath)
+#     image = cv2.resize(image, (1920,1080))
+#
+#     check_kill_feed(image)
+#
+#     kfes = read_kill_feed(image)
+#     scoreboard = read_scoreboard(image, kfes)
+#     for kf in kfes:
+#         kf['scoreboard_readout'] = scoreboard
+#         print(kf['kill']['name'] + " on the " + kf['kill']['desc'] + "team killed " + kf['death']['name'] + " on the " +
+#               kf['death']['desc'] + "team at " + kf['scoreboard_readout']['time'] + ", with the score of blue:" +
+#               kf['scoreboard_readout']['blue_score'] + " vs orange:" + kf['scoreboard_readout']['orange_score'])
+#
+#     cv2.imshow(imagePath, image)
+#     cv2.waitKey(0)
