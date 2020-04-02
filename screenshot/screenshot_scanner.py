@@ -5,6 +5,9 @@ import imutils
 import pytesseract
 import cv2
 import datetime
+from KillfeedEvent import KillfeedEvent
+from PlayerInKillfeed import PlayerInKillfeed
+from ScoreboardReadout import ScoreboardReadout
 
 # construct the argument parse and parse the arguments
 # ap = argparse.ArgumentParser()
@@ -30,26 +33,6 @@ upper_blue = np.array([255, 150, 50], dtype = "uint8")
 
 lower_orange = np.array([0, 90, 200], dtype = "uint8")
 upper_orange = np.array([70, 160, 255], dtype = "uint8")
-
-
-# This function returns a player's status in the killfeed
-def player_in_killfeed(desc, name, x, y):
-    d = dict();
-    d['desc']   = desc
-    d['team']   = "" # atk/def? blue/orange? goodguys/badguys?
-    d['name']   = name
-    d['x']      = x
-    d['y']      = y
-    return d
-
-
-# This represents a kill/death and the associated information
-def killfeed_event(kill, death, scoreboard_readout):
-    d = dict();
-    d['kill']   = kill
-    d['death']  = death
-    d['scoreboard_readout']  = scoreboard_readout
-    return d
 
 
 # this represents the readout from the scoreboard
@@ -113,7 +96,7 @@ def read_scoreboard(input, killfeed_events):
     total_func_time = isolate_scoreboard_end - isolate_scoreboard_start;
     # print("total func time " + str(total_func_time.microseconds))
 
-    return scoreboard_readout(time, orange_score, blue_score)
+    return ScoreboardReadout(time, orange_score, blue_score)
 
 
 # scan in numbers from scoreboard
@@ -143,6 +126,7 @@ def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
             pytess_end = datetime.datetime.now()
             pytess_diff= pytess_end-pytess_start;
             # print("color pytess time is " + str(pytess_diff.microseconds))
+            # TODO: improve scoreboard reliability?
             if (color_text == ""):
                 print("missed reading!!! for " + desc)
                 continue
@@ -185,7 +169,7 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
             name = pytesseract.image_to_string(thresh, config=config)
             # print(desc + name)
             # print(desc + " x value: " + str(x) + ", y value: " + str(y))
-            player = player_in_killfeed(desc, name, x, y)
+            player = PlayerInKillfeed(desc, name, x, y)
             # add player to the list of players currently in the killfeed
             players.append(player)
 
@@ -225,23 +209,23 @@ def sort_kill_feed(blue_players, orange_players):
     players = blue_players
     players.extend(orange_players)
 
-    players = sorted(players, key = lambda i: i['y'])
+    players = sorted(players, key = lambda i: i.y)
 
     # loop through and check if previous y value is within range of the current player
     # if so, then create a killfeed_event
     # TODO: address Self destructs, "x found the bomb" lines
     killfeed_events = []
     prev_y_val = 0
-    prev_player = player_in_killfeed(None, None, None, None)
+    prev_player = PlayerInKillfeed(None, None, None, None)
     for player in players:
-        if player['y'] in range(prev_y_val-10, prev_y_val+10):
-            if prev_player['x'] < player['x']:
-                kf = killfeed_event(prev_player, player, "")
+        if player.y in range(prev_y_val-10, prev_y_val+10):
+            if prev_player.x < player.x:
+                kf = KillfeedEvent(prev_player, player, "")
             else:
-                kf = killfeed_event(player, prev_player, "")
+                kf = KillfeedEvent(player, prev_player, "")
             killfeed_events.append(kf)
         prev_player = player
-        prev_y_val = player['y']
+        prev_y_val = player.y
 
     return killfeed_events
 
@@ -278,8 +262,8 @@ def check_kill_feed(input):
             return True
 
     return False
-
-
+#
+#
 # for refPath in paths.list_images(args["ref"]):
 #     # load image, resize, and convert to grayscale
 #     ref = cv2.imread(refPath)
@@ -301,10 +285,10 @@ def check_kill_feed(input):
 #     kfes = read_kill_feed(image)
 #     scoreboard = read_scoreboard(image, kfes)
 #     for kf in kfes:
-#         kf['scoreboard_readout'] = scoreboard
-#         print(kf['kill']['name'] + " on the " + kf['kill']['desc'] + "team killed " + kf['death']['name'] + " on the " +
-#               kf['death']['desc'] + "team at " + kf['scoreboard_readout']['time'] + ", with the score of blue:" +
-#               kf['scoreboard_readout']['blue_score'] + " vs orange:" + kf['scoreboard_readout']['orange_score'])
+#         kf.scoreboard_readout = scoreboard
+#         print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
+#               kf.death.desc + "team at " + kf.scoreboard_readout.time + ", with the score of blue:" +
+#               kf.scoreboard_readout.blue_score + " vs orange:" + kf.scoreboard_readout.orange_score)
 #
 #     cv2.imshow(imagePath, image)
 #     cv2.waitKey(0)

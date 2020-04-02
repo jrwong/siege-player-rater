@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/screenshot/screenshot.iml" filepath="$PROJECT_DIR$/screenshot/screenshot.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/siege-player-rater.iml" filepath="$PROJECT_DIR$/.idea/siege-player-rater.iml" />
     </modules>
   </component>
