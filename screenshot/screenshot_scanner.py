@@ -7,7 +7,7 @@ import cv2
 import datetime
 from KillfeedEvent import KillfeedEvent
 from PlayerInKillfeed import PlayerInKillfeed
-from ScoreboardReadout import ScoreboardReadout
+from ScoreTimeReadout import ScoreTimeReadout
 
 # construct the argument parse and parse the arguments
 # ap = argparse.ArgumentParser()
@@ -96,7 +96,7 @@ def read_scoreboard(input, killfeed_events):
     total_func_time = isolate_scoreboard_end - isolate_scoreboard_start;
     # print("total func time " + str(total_func_time.microseconds))
 
-    return ScoreboardReadout(time, orange_score, blue_score)
+    return ScoreTimeReadout(time, orange_score, blue_score)
 
 
 # scan in numbers from scoreboard
