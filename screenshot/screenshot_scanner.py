@@ -218,7 +218,7 @@ def sort_kill_feed(blue_players, orange_players):
     prev_y_val = 0
     prev_player = PlayerInKillfeed(None, None, None, None)
     for player in players:
-        if player.y in range(prev_y_val-10, prev_y_val+10):
+        if player.y in range(prev_y_val-10, prev_y_val+10) and prev_player.x and player.x:
             if prev_player.x < player.x:
                 kf = KillfeedEvent(prev_player, player, "")
             else:
@@ -243,21 +243,17 @@ def check_kill_feed(input):
 
     cnts = find_color_contours(kill_feed, lower_orange, upper_orange)
     for (i, c) in enumerate(cnts):
-        # compute the bounding box of the contour, then use the
-        # bounding box coordinates to derive the aspect ratio
         (x, y, w, h) = cv2.boundingRect(c)
         ar = w / float(h)
-        # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
+        # checking for a box with an area of 5k+ pixels and an aspect ratio of > 2:1
         if w*h > 5000 and ar > 2:
             return True
 
     cnts = find_color_contours(kill_feed, lower_blue, upper_blue)
     for (i, c) in enumerate(cnts):
-        # compute the bounding box of the contour, then use the
-        # bounding box coordinates to derive the aspect ratio
         (x, y, w, h) = cv2.boundingRect(c)
         ar = w / float(h)
-        # since score will be a fixed size of about 25 x 35, we'll set the area at about 300 to be safe
+        # checking for a box with an area of 5k+ pixels and an aspect ratio of > 2:1
         if w*h > 5000 and ar > 2:
             return True
 
