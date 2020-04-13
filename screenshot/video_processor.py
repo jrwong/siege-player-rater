@@ -59,8 +59,8 @@ while True:
             print(players)
 
         if screenshot_scanner.check_kill_feed(frame):
-            killfeed_events = screenshot_scanner.read_kill_feed(frame)
-            scoreboard = screenshot_scanner.read_scoreboard(frame, killfeed_events)
+            killfeed_events = screenshot_scanner.read_kill_feed(frame, players)
+            scoreboard = screenshot_scanner.read_scoreboard(frame)
             # TODO: filter out similar events from previous seconds
             for kf in killfeed_events:
                 kf.scoreboard_readout = scoreboard

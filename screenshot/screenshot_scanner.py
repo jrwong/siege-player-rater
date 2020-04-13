@@ -8,6 +8,7 @@ import datetime
 from KillfeedEvent import KillfeedEvent
 from PlayerInKillfeed import PlayerInKillfeed
 from ScoreTimeReadout import ScoreTimeReadout
+from fuzzywuzzy import process
 
 # construct the argument parse and parse the arguments
 # ap = argparse.ArgumentParser()
@@ -34,6 +35,7 @@ upper_blue = np.array([255, 150, 50], dtype = "uint8")
 lower_orange = np.array([0, 90, 200], dtype = "uint8")
 upper_orange = np.array([70, 160, 255], dtype = "uint8")
 
+player_list = []
 
 # this represents the readout from the scoreboard
 def scoreboard_readout(time, orange_score, blue_score):
@@ -45,7 +47,7 @@ def scoreboard_readout(time, orange_score, blue_score):
 
 
 # isolate scoreboard from screenshot and return: Time in round, Match Score
-def read_scoreboard(input, killfeed_events):
+def read_scoreboard(input):
     isolate_scoreboard_start = datetime.datetime.now()
 
     #Isolate scoreboard location on a 1080p pic
@@ -167,14 +169,28 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
             # cv2.waitKey(0)
 
             name = pytesseract.image_to_string(thresh, config=config)
+            validated_name = validate_player(name, player_list)
             # print(desc + name)
             # print(desc + " x value: " + str(x) + ", y value: " + str(y))
-            player = PlayerInKillfeed(desc, name, x, y)
+            player = PlayerInKillfeed(desc, validated_name, x, y)
             # add player to the list of players currently in the killfeed
             players.append(player)
 
     return players
 
+
+# validates player by checking against player list if it exists
+def validate_player(name, player_list):
+    if not player_list:
+        return name
+
+    best_match = process.extractOne(name, player_list)
+    if best_match[1] > 80:
+        print("best match for {}: {} with score {}", name, best_match[0], best_match[1])
+        return best_match[0]
+    else:
+        print("player name {} badly missed the matching with a best match of {} and score {}", name, best_match[0], best_match[1])
+        return name
 
 # finds contours for a given color. filter by aspect ratio and/or size
 def find_color_contours(input_image, lower_color, upper_color):
@@ -193,7 +209,9 @@ def find_color_contours(input_image, lower_color, upper_color):
     return cnts
 
 
-def read_kill_feed(input):
+def read_kill_feed(input, players):
+    global player_list
+    player_list = players
     kill_feed = input[250:450, 1420:1920]
     config = ("-l eng --oem 1 --psm 8")
     orange_players = read_colormasked_areas_killfeed(kill_feed, lower_orange, upper_orange, config, "orange ")
