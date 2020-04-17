@@ -28,6 +28,7 @@ from fuzzywuzzy import process
 rectKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (13, 5))
 sqKernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
 kernel = np.ones((5,5),np.uint8)
+kernel_1 = np.ones((2,2),np.uint8)
 
 lower_blue = np.array([170, 100, 0], dtype ="uint8")
 upper_blue = np.array([255, 150, 50], dtype = "uint8")
@@ -75,16 +76,50 @@ def read_scoreboard(input):
     # # print("right symbol result: " + str(right_score))
 
     #greyscale
-    # TODO: address red flashing numbers, address bomb timer
+    # TODO: address red flashing numbers
     roi_gray = cv2.cvtColor(clock, cv2.COLOR_BGR2GRAY)
-    (T, roi_gray) = cv2.threshold(roi_gray, 180, 255, cv2.THRESH_BINARY_INV)
+    (T, thresh) = cv2.threshold(roi_gray, 180, 255, cv2.THRESH_BINARY_INV)
     # cv2.imshow("roi_gray", roi_gray)
     # cv2.waitKey(0)
 
     config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 7")
 
     pytess_start = datetime.datetime.now()
-    time = pytesseract.image_to_string(roi_gray, config=config)
+    time = pytesseract.image_to_string(thresh, config=config)
+    if not time:
+        erosion = cv2.erode(thresh, kernel_1, iterations=1)
+        contours, hierarchy = cv2.findContours(erosion,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+        hierarchy = hierarchy[0]
+        # ensure at least some circles were found
+
+        if contours is not None:
+
+            # loop over the (x, y) coordinates and radius of the circles
+            for component in zip(contours, hierarchy):
+
+                cnt = component[0]
+                hr = component[1]
+                # rect = cv2.minAreaRect(cnt)
+                # box = cv2.boxPoints(rect)
+                # box = np.int0(box)
+                # cv2.drawContours(erosion,[box],0,(0,0,255),2)
+                x,y,w,h = cv2.boundingRect(cnt)
+
+                if 0 < y < 7:
+                    cv2.drawContours(erosion,[cnt],0,(0,255,0),6)
+                    # cv2.rectangle(erosion,(x,y),(x+w,y+h),(0,255,0),2)
+                    if hr[2] < 0:
+                        print("open")
+                        perimeter = cv2.arcLength(cnt, False)
+                        seconds_left = round(perimeter/260 * 45)
+                        print("{} seconds left to defuse".format(seconds_left))
+                    else:
+                        print("closed")
+                        print("45 seconds left to defuse")
+                    print("x:{}-{} y:{}-{}".format(x, x+w, y, y+h))
+                    cv2.imshow("erosion", erosion)
+                    cv2.waitKey(0)
+
     pytess_end = datetime.datetime.now()
     pytess_diff= pytess_end-pytess_start;
     # print("time is " + time)
@@ -296,13 +331,13 @@ def check_kill_feed(input):
 #
 #     check_kill_feed(image)
 #
-#     kfes = read_kill_feed(image)
-#     scoreboard = read_scoreboard(image, kfes)
+#     kfes = read_kill_feed(image, [])
+#     scoreboard = read_scoreboard(image)
 #     for kf in kfes:
 #         kf.scoreboard_readout = scoreboard
 #         print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
 #               kf.death.desc + "team at " + kf.scoreboard_readout.time + ", with the score of blue:" +
 #               kf.scoreboard_readout.blue_score + " vs orange:" + kf.scoreboard_readout.orange_score)
-#
-#     cv2.imshow(imagePath, image)
-#     cv2.waitKey(0)
+    #
+    # cv2.imshow(imagePath, image)
+    # cv2.waitKey(0)
