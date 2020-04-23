@@ -5,6 +5,7 @@ from imutils import paths
 import argparse
 import cv2
 import datetime
+from queue import Queue
 
 # construct the argument parse and parse the arguments
 from CountsPerSec import CountsPerSec
@@ -37,6 +38,10 @@ players = []
 
 video_getter = VideoGet(args["video"]).start()
 cps = CountsPerSec().start()
+# Initializing a queue
+q = Queue(maxsize = 500)
+num_fetch_threads = 2
+video_seconds = 0
 
 # keep looping over the frames
 while True:
@@ -52,22 +57,19 @@ while True:
 
     cps.increment()
 
+    # TODO: implement queue for processing frames of interest
     if count % frame_skips == 0:
+        video_seconds += 1
         # if the scoreboard is showing in the frame and the player list isn't populated, run scoreboard reader
-        if not players and scoreboard_scanner.is_scoreboard(frame):
-            players = scoreboard_scanner.read_scoreboard(frame)
-            print(players)
+        # if not players and scoreboard_scanner.is_scoreboard(frame):
+        #     players = scoreboard_scanner.read_scoreboard(frame)
+        #     print(players)
 
         if screenshot_scanner.check_kill_feed(frame):
-            killfeed_events = screenshot_scanner.read_kill_feed(frame, players)
-            scoreboard = screenshot_scanner.read_scoreboard(frame)
-            # TODO: filter out similar events from previous seconds
-            for kf in killfeed_events:
-                kf.scoreboard_readout = scoreboard
-                if kf not in running_killfeed:
-                    running_killfeed.append(kf)
-                    print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
-                          kf.death.desc + "team at " + kf.scoreboard_readout.time)
+            q.put(frame)
+            if q.full():
+                print("queue full!")
+                break
 
     key = cv2.waitKey(1) & 0xFF
     # if the 'q' key is pressed, stop the loop
@@ -82,6 +84,22 @@ while True:
 
 vid_end = datetime.datetime.now()
 process_time = vid_end-vid_start;
-print(str(process_time.seconds))
+
+print("size of queue" + str(q.qsize()))
+print("process time" + str(process_time.seconds))
+print("seconds of video" + str(video_seconds))
+
+while not q.full():
+    curr_frame = q.get()
+    killfeed_events = screenshot_scanner.read_kill_feed(curr_frame, players)
+    scoreboard = screenshot_scanner.read_scoreboard(curr_frame)
+
+    for kf in killfeed_events:
+        kf.scoreboard_readout = scoreboard
+        if kf not in running_killfeed:
+            running_killfeed.append(kf)
+            print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
+                  kf.death.desc + "team at " + kf.scoreboard_readout.time)
+
 # close all windows
 cv2.destroyAllWindows()

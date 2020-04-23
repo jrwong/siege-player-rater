@@ -91,7 +91,6 @@ def read_scoreboard(input):
         contours, hierarchy = cv2.findContours(erosion,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
         hierarchy = hierarchy[0]
         # ensure at least some circles were found
-
         if contours is not None:
 
             # loop over the (x, y) coordinates and radius of the circles
@@ -107,18 +106,18 @@ def read_scoreboard(input):
 
                 if 0 < y < 7:
                     cv2.drawContours(erosion,[cnt],0,(0,255,0),6)
-                    # cv2.rectangle(erosion,(x,y),(x+w,y+h),(0,255,0),2)
+                    # open contour
                     if hr[2] < 0:
-                        print("open")
                         perimeter = cv2.arcLength(cnt, False)
                         seconds_left = round(perimeter/260 * 45)
-                        print("{} seconds left to defuse".format(seconds_left))
+                        time = "{} seconds left to defuse".format(seconds_left)
+                    # closed contour
                     else:
-                        print("closed")
-                        print("45 seconds left to defuse")
-                    print("x:{}-{} y:{}-{}".format(x, x+w, y, y+h))
-                    cv2.imshow("erosion", erosion)
-                    cv2.waitKey(0)
+                        time = "45 seconds left to defuse"
+
+    # if still no time found, it's the end of the round
+    if not time:
+        time = "end of round"
 
     pytess_end = datetime.datetime.now()
     pytess_diff= pytess_end-pytess_start;
@@ -204,7 +203,8 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
             # cv2.waitKey(0)
 
             name = pytesseract.image_to_string(thresh, config=config)
-            validated_name = validate_player(name, player_list)
+            validated_name = name
+            # validated_name = validate_player(name, player_list)
             # print(desc + name)
             # print(desc + " x value: " + str(x) + ", y value: " + str(y))
             player = PlayerInKillfeed(desc, validated_name, x, y)
