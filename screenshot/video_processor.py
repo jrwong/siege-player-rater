@@ -6,6 +6,9 @@ import argparse
 import cv2
 import datetime
 from queue import Queue
+import time
+from event_compiler import compile_player_scores
+# from collections import defaultdict
 
 # construct the argument parse and parse the arguments
 from CountsPerSec import CountsPerSec
@@ -35,45 +38,41 @@ vid_start = datetime.datetime.now()
 running_killfeed = []
 
 players = []
+player_dict = {}
 
 video_getter = VideoGet(args["video"]).start()
+cap = cv2.VideoCapture(args["video"])
 cps = CountsPerSec().start()
 # Initializing a queue
-q = Queue(maxsize = 500)
+q = Queue(maxsize = 100000)
 num_fetch_threads = 2
-video_seconds = 0
 
 # keep looping over the frames
 while True:
     # grab the current frame and then handle if the frame is returned
     # from either the 'VideoCapture' or 'VideoStream' object,
     # respectively
-    if (cv2.waitKey(1) == ord("q")) or video_getter.stopped:
-        video_getter.stop()
-        break
-    frame = video_getter.frame
+    # if (cv2.waitKey(1) == ord("q")) or video_getter.stopped:
+    #     video_getter.stop()
+    #     break
+    # frame = video_getter.frame
 
-    count += 1
-
-    cps.increment()
-
-    # TODO: implement queue for processing frames of interest
-    if count % frame_skips == 0:
-        video_seconds += 1
-        # if the scoreboard is showing in the frame and the player list isn't populated, run scoreboard reader
-        # if not players and scoreboard_scanner.is_scoreboard(frame):
-        #     players = scoreboard_scanner.read_scoreboard(frame)
-        #     print(players)
-
-        if screenshot_scanner.check_kill_feed(frame):
+    (grabbed, frame) = cap.read()
+    if grabbed:
+        cps.increment()
+        count += 1
+        if count % frame_skips == 0:
             q.put(frame)
             if q.full():
                 print("queue full!")
                 break
 
-    key = cv2.waitKey(1) & 0xFF
-    # if the 'q' key is pressed, stop the loop
-    if key == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        # if the 'q' key is pressed, stop the loop
+        if key == ord("q"):
+            break
+
+    else:
         break
 # # if we are not using a video file, stop the video file stream
 # if not args.get("video", False):
@@ -81,25 +80,35 @@ while True:
 # # otherwise, release the camera pointer
 # else:
 #     vs.release()
+time.sleep(5)
+print("size of queue " + str(q.qsize()))
+print("frame count" + str(count))
+
+for curr_frame in list(q.queue):
+
+    # TODO: implement queue for processing frames of interest
+
+        # if the scoreboard is showing in the frame and the player list isn't populated, run scoreboard reader
+        # if not players and scoreboard_scanner.is_scoreboard(frame):
+        #     players = scoreboard_scanner.read_scoreboard(frame)
+        #     print(players)
+    curr_frame = cv2.resize(curr_frame, (1920,1080))
+    if screenshot_scanner.check_kill_feed(curr_frame):
+        killfeed_events = screenshot_scanner.read_kill_feed(curr_frame, players)
+        scoreboard = screenshot_scanner.read_scoreboard(curr_frame)
+
+        for kf in killfeed_events:
+            kf.scoreboard_readout = scoreboard
+            if kf not in running_killfeed:
+                running_killfeed.append(kf)
+                print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
+                      kf.death.desc + "team at " + kf.scoreboard_readout.time)
+
+
+compile_player_scores(running_killfeed, player_dict)
 
 vid_end = datetime.datetime.now()
 process_time = vid_end-vid_start;
-
-print("size of queue" + str(q.qsize()))
 print("process time" + str(process_time.seconds))
-print("seconds of video" + str(video_seconds))
-
-while not q.full():
-    curr_frame = q.get()
-    killfeed_events = screenshot_scanner.read_kill_feed(curr_frame, players)
-    scoreboard = screenshot_scanner.read_scoreboard(curr_frame)
-
-    for kf in killfeed_events:
-        kf.scoreboard_readout = scoreboard
-        if kf not in running_killfeed:
-            running_killfeed.append(kf)
-            print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
-                  kf.death.desc + "team at " + kf.scoreboard_readout.time)
-
 # close all windows
 cv2.destroyAllWindows()
