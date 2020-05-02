@@ -9,6 +9,7 @@ from KillfeedEvent import KillfeedEvent
 from PlayerInKillfeed import PlayerInKillfeed
 from ScoreTimeReadout import ScoreTimeReadout
 from fuzzywuzzy import process
+import re
 
 # construct the argument parse and parse the arguments
 # ap = argparse.ArgumentParser()
@@ -86,7 +87,8 @@ def read_scoreboard(input):
 
     pytess_start = datetime.datetime.now()
     time = pytesseract.image_to_string(thresh, config=config)
-    if not time:
+
+    if not validate_timestamp(time):
         erosion = cv2.erode(thresh, kernel_1, iterations=1)
         contours, hierarchy = cv2.findContours(erosion,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
         hierarchy = hierarchy[0]
@@ -227,13 +229,12 @@ def validate_player(name, player_list):
         print("player name {} badly missed the matching with a best match of {} and score {}", name, best_match[0], best_match[1])
         return name
 
+
 # finds contours for a given color. filter by aspect ratio and/or size
 def find_color_contours(input_image, lower_color, upper_color):
     # find the colors within the specified boundaries and apply
     # the mask
     mask_color = cv2.inRange(input_image, lower_color, upper_color)
-    # cv2.imshow("mask_color", mask_color)
-    # cv2.waitKey(0)
 
     # find contours in the thresholded image, then initialize the
     # list of digit locations
@@ -311,6 +312,36 @@ def check_kill_feed(input):
             return True
 
     return False
+
+
+# scan the colormasked areas. if read_names = true, run the image_to_string
+# else just return True or False whether the frame is showing a scoreboard
+def round_start_color_check(input_image, lower_color, upper_color):
+    cnts = find_color_contours(input_image, lower_color, upper_color)
+    for (i, c) in enumerate(cnts):
+        (x, y, w, h) = cv2.boundingRect(c)
+        # if we have a blue or orange bar more than 1000 pixels across, it's probably the scoreboard
+        if w*h > 5000:
+            cv2.rectangle(input_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            # cv2.imshow("round_start_color_check", input_image)
+            # cv2.waitKey(0)
+            return True
+
+    return False
+
+
+# checks for large enough blue and orange patches in the middle of screen to indicate round start
+def is_round_start_screen(frame):
+    middle_section = frame[400:600, 750:1150]
+    # cv2.imshow("middle_section", middle_section)
+    # cv2.waitKey(0)
+    return round_start_color_check(middle_section, lower_orange, upper_orange) \
+           and round_start_color_check(middle_section, lower_blue, upper_blue)
+
+
+# checks that timestamp read from image is the correct format (e.g. 0:45)
+def validate_timestamp(time):
+    return re.search("[0-9]:[0-9]{2}", time)
 #
 #
 # for refPath in paths.list_images(args["ref"]):
@@ -327,7 +358,9 @@ def check_kill_feed(input):
 # for imagePath in paths.list_images(args["images"]):
 #     # load image, resize, and convert to grayscale
 #     image = cv2.imread(imagePath)
-#     image = cv2.resize(image, (1920,1080))
+#     image = cv2.resize(image, (1920, 1080))
+    # print(is_round_start_screen(image))
+
 #
 #     check_kill_feed(image)
 #

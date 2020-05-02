@@ -9,9 +9,9 @@ class KillfeedEvent:
     def __eq__(self, other):
         """Overrides the default implementation"""
         if isinstance(other, KillfeedEvent):
-            return self.kill == other.kill and self.death == other.death \
-                   and self.scoreboard_readout.orange_score == other.scoreboard_readout.orange_score \
-                   and self.scoreboard_readout.blue_score == other.scoreboard_readout.blue_score
+            return self.kill == other.kill and self.death == other.death
+                   # and self.scoreboard_readout.orange_score == other.scoreboard_readout.orange_score \
+                   # and self.scoreboard_readout.blue_score == other.scoreboard_readout.blue_score
         return NotImplemented
 
     def __hash__(self):

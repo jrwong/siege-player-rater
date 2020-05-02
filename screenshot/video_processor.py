@@ -93,6 +93,10 @@ for curr_frame in list(q.queue):
         #     players = scoreboard_scanner.read_scoreboard(frame)
         #     print(players)
     curr_frame = cv2.resize(curr_frame, (1920,1080))
+
+    if screenshot_scanner.is_round_start_screen(curr_frame):
+        print("round start")
+
     if screenshot_scanner.check_kill_feed(curr_frame):
         killfeed_events = screenshot_scanner.read_kill_feed(curr_frame, players)
         scoreboard = screenshot_scanner.read_scoreboard(curr_frame)
