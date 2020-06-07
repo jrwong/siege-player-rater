@@ -31,7 +31,7 @@ for refPath in paths.list_images(args["ref"]):
     attackersymbol = thresh
 
 # skip once every second
-frame_skips = 60
+frame_skips = 30
 count = 0
 
 vid_start = datetime.datetime.now()
@@ -46,6 +46,7 @@ cps = CountsPerSec().start()
 # Initializing a queue
 q = Queue(maxsize = 100000)
 num_fetch_threads = 2
+
 
 # keep looping over the frames
 while True:
@@ -80,7 +81,9 @@ while True:
 # # otherwise, release the camera pointer
 # else:
 #     vs.release()
-time.sleep(5)
+queue_end = datetime.datetime.now()
+queue_time = queue_end-vid_start
+print("queue time" + str(queue_time.seconds))
 print("size of queue " + str(q.qsize()))
 print("frame count" + str(count))
 
@@ -94,6 +97,7 @@ for curr_frame in list(q.queue):
         #     print(players)
     curr_frame = cv2.resize(curr_frame, (1920,1080))
 
+    round_num = 0
     if screenshot_scanner.is_round_start_screen(curr_frame):
         print("round start")
 

@@ -40,4 +40,4 @@ class Player:
         return hash(tuple(sorted(self.__dict__.items())))
 
     def __repr__(self):
-        return "name: % s kills:% s deaths:% s" % (self.name, self.kills, self.deaths)
+        return "name: % s kills:% s deaths:% s opening_kills:% s opening_deaths:% s trades:% s " % (self.name, self.kills, self.deaths, self.opening_kills, self.opening_deaths, self.trades)

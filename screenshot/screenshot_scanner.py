@@ -34,7 +34,7 @@ kernel_1 = np.ones((2,2),np.uint8)
 lower_blue = np.array([170, 100, 0], dtype ="uint8")
 upper_blue = np.array([255, 150, 50], dtype = "uint8")
 
-lower_orange = np.array([0, 90, 200], dtype = "uint8")
+lower_orange = np.array([0, 90, 180], dtype = "uint8")
 upper_orange = np.array([70, 160, 255], dtype = "uint8")
 
 player_list = []
@@ -126,15 +126,15 @@ def read_scoreboard(input):
     # print("time is " + time)
     # print("pytess time " + str(pytess_diff.microseconds))
 
-    config = ("-l eng -c tessedit_char_whitelist=012345 --oem 1 --psm 10")
-    orange_score = read_colormasked_areas(scoreboard, lower_orange, upper_orange, config, "orange score: ")
-    blue_score = read_colormasked_areas(scoreboard, lower_blue, upper_blue, config, "blue score: ")
+    # config = ("-l eng -c tessedit_char_whitelist=012345 --oem 1 --psm 10")
+    # orange_score = read_colormasked_areas(scoreboard, lower_orange, upper_orange, config, "orange score: ")
+    # blue_score = read_colormasked_areas(scoreboard, lower_blue, upper_blue, config, "blue score: ")
 
     isolate_scoreboard_end = datetime.datetime.now()
     total_func_time = isolate_scoreboard_end - isolate_scoreboard_start;
     # print("total func time " + str(total_func_time.microseconds))
 
-    return ScoreTimeReadout(time, orange_score, blue_score)
+    return ScoreTimeReadout(time, "", "")
 
 
 # scan in numbers from scoreboard
@@ -165,8 +165,10 @@ def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
             pytess_diff= pytess_end-pytess_start;
             # print("color pytess time is " + str(pytess_diff.microseconds))
             # TODO: improve scoreboard reliability?
-            if (color_text == ""):
+            if color_text == "":
                 print("missed reading!!! for " + desc)
+                cv2.imshow("scoreboard_number", input_image)
+                cv2.waitKey(0)
                 continue
             return color_text
 
@@ -330,9 +332,15 @@ def round_start_color_check(input_image, lower_color, upper_color):
     return False
 
 
+# def check_character_select(input_image, reference_image):
+#     settings_section = input_image[50:150, 1720:1920]
+#     cv2.imshow("settings_section", settings_section)
+#     cv2.waitKey(0)
+
+
 # checks for large enough blue and orange patches in the middle of screen to indicate round start
 def is_round_start_screen(frame):
-    middle_section = frame[400:600, 750:1150]
+    middle_section = frame[200:400, 750:1150]
     # cv2.imshow("middle_section", middle_section)
     # cv2.waitKey(0)
     return round_start_color_check(middle_section, lower_orange, upper_orange) \
@@ -359,8 +367,8 @@ def validate_timestamp(time):
 #     # load image, resize, and convert to grayscale
 #     image = cv2.imread(imagePath)
 #     image = cv2.resize(image, (1920, 1080))
-    # print(is_round_start_screen(image))
-
+#     # check_character_select(image, image)
+#
 #
 #     check_kill_feed(image)
 #
@@ -371,6 +379,6 @@ def validate_timestamp(time):
 #         print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
 #               kf.death.desc + "team at " + kf.scoreboard_readout.time + ", with the score of blue:" +
 #               kf.scoreboard_readout.blue_score + " vs orange:" + kf.scoreboard_readout.orange_score)
-    #
-    # cv2.imshow(imagePath, image)
-    # cv2.waitKey(0)
+#
+#     cv2.imshow(imagePath, image)
+#     cv2.waitKey(0)
