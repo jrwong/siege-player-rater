@@ -21,8 +21,6 @@ class CustomFileVideoStream(FileVideoStream):
         # intialize thread
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
-        self.thread = Thread(target=self.update, args=())
-        self.thread.daemon = True
         self.sample_frequency = sample_frequency
 
     def update(self):

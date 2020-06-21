@@ -8,6 +8,7 @@ import datetime
 from KillfeedEvent import KillfeedEvent
 from PlayerInKillfeed import PlayerInKillfeed
 from ScoreTimeReadout import ScoreTimeReadout
+import scoreboard_scanner
 from fuzzywuzzy import process
 import re
 
@@ -23,6 +24,7 @@ import re
 # ap.add_argument("-p", "--padding", type=float, default=0.0,
 #                 help="amount of padding to add to each border of ROI")
 # ap.add_argument("-r", "--ref", required=True, help="path to reference images directory")
+# ap.add_argument("-s", "--settings", help="path to settings icon")
 # args = vars(ap.parse_args())
 
 #Initialize a rectangular and square structuring kernel
@@ -36,6 +38,8 @@ upper_blue = np.array([255, 150, 50], dtype = "uint8")
 
 lower_orange = np.array([0, 90, 180], dtype = "uint8")
 upper_orange = np.array([70, 160, 255], dtype = "uint8")
+
+time_config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 7")
 
 player_list = []
 
@@ -83,27 +87,22 @@ def read_scoreboard(input):
     # cv2.imshow("roi_gray", roi_gray)
     # cv2.waitKey(0)
 
-    config = ("-l eng -c tessedit_char_whitelist=0123456789: --oem 1 --psm 7")
-
     pytess_start = datetime.datetime.now()
-    time = pytesseract.image_to_string(thresh, config=config)
+
+    time = read_text(clock, time_config, 180, cv2.THRESH_BINARY_INV)
 
     if not validate_timestamp(time):
         erosion = cv2.erode(thresh, kernel_1, iterations=1)
         contours, hierarchy = cv2.findContours(erosion,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-        hierarchy = hierarchy[0]
-        # ensure at least some circles were found
-        if contours is not None:
 
+        # ensure at least some circles were found
+        if contours is not None and hierarchy is not None:
+            hierarchy = hierarchy[0]
             # loop over the (x, y) coordinates and radius of the circles
             for component in zip(contours, hierarchy):
 
                 cnt = component[0]
                 hr = component[1]
-                # rect = cv2.minAreaRect(cnt)
-                # box = cv2.boxPoints(rect)
-                # box = np.int0(box)
-                # cv2.drawContours(erosion,[box],0,(0,0,255),2)
                 x,y,w,h = cv2.boundingRect(cnt)
 
                 if 0 < y < 7:
@@ -138,6 +137,7 @@ def read_scoreboard(input):
 
 
 # scan in numbers from scoreboard
+# TODO: THIS NEEDS TO BE FIXED UP
 def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
 
     cnts = find_color_contours(input_image, lower_color, upper_color)
@@ -159,10 +159,10 @@ def read_colormasked_areas(input_image, lower_color, upper_color, config, desc):
             color_img = cv2.bitwise_not(color_img)
             # cv2.imshow("color_img final", color_img)
             # cv2.waitKey(0)
-            pytess_start = datetime.datetime.now()
+            # pytess_start = datetime.datetime.now()
             color_text = pytesseract.image_to_string(color_img, config=config)
-            pytess_end = datetime.datetime.now()
-            pytess_diff= pytess_end-pytess_start;
+            # pytess_end = datetime.datetime.now()
+            # pytess_diff= pytess_end-pytess_start;
             # print("color pytess time is " + str(pytess_diff.microseconds))
             # TODO: improve scoreboard reliability?
             if color_text == "":
@@ -207,8 +207,8 @@ def read_colormasked_areas_killfeed(input_image, lower_color, upper_color, confi
             # cv2.waitKey(0)
 
             name = pytesseract.image_to_string(thresh, config=config)
-            validated_name = name
-            # validated_name = validate_player(name, player_list)
+
+            validated_name = validate_player(name, player_list)
             # print(desc + name)
             # print(desc + " x value: " + str(x) + ", y value: " + str(y))
             player = PlayerInKillfeed(desc, validated_name, x, y)
@@ -225,7 +225,7 @@ def validate_player(name, player_list):
 
     best_match = process.extractOne(name, player_list)
     if best_match[1] > 80:
-        print("best match for {}: {} with score {}", name, best_match[0], best_match[1])
+        # print("best match for {}: {} with score {}", name, best_match[0], best_match[1])
         return best_match[0]
     else:
         print("player name {} badly missed the matching with a best match of {} and score {}", name, best_match[0], best_match[1])
@@ -320,38 +320,61 @@ def check_kill_feed(input):
 # else just return True or False whether the frame is showing a scoreboard
 def round_start_color_check(input_image, lower_color, upper_color):
     cnts = find_color_contours(input_image, lower_color, upper_color)
+    name_blocks = 0
     for (i, c) in enumerate(cnts):
         (x, y, w, h) = cv2.boundingRect(c)
-        # if we have a blue or orange bar more than 1000 pixels across, it's probably the scoreboard
-        if w*h > 5000:
+        # if we have at least 3 blocks of blue or orange that have the proper w/h ratio
+        # it's probably the round start
+        if w*h > 5000 and w/h > 5:
             cv2.rectangle(input_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            # cv2.imshow("round_start_color_check", input_image)
-            # cv2.waitKey(0)
-            return True
+            name_blocks += 1
+            if name_blocks > 2:
+                return True
 
     return False
 
 
-# def check_character_select(input_image, reference_image):
-#     settings_section = input_image[50:150, 1720:1920]
-#     cv2.imshow("settings_section", settings_section)
-#     cv2.waitKey(0)
-
-
-# checks for large enough blue and orange patches in the middle of screen to indicate round start
-def is_round_start_screen(frame):
-    middle_section = frame[200:400, 750:1150]
-    # cv2.imshow("middle_section", middle_section)
+def check_for_settings_icon(input_image, reference_image):
+    settings_section = input_image[30:180, 1700:1870]
+    # cv2.imshow("settings_section", settings_section)
     # cv2.waitKey(0)
-    return round_start_color_check(middle_section, lower_orange, upper_orange) \
-           and round_start_color_check(middle_section, lower_blue, upper_blue)
+    left_result = cv2.matchTemplate(settings_section, reference_image, cv2.TM_CCOEFF)
+    (_, left_score, _, _) = cv2.minMaxLoc(left_result)
+    # print("left symbol result: " + str(left_score))
+    # from testing, seems like the limit is about 10 million with 15 million being ideal
+    return left_score > 10000000
 
+
+# 3 checks to indicate round start
+# 1. check for settings icon in the proper location
+# 2. check for time to be 0
+# 3. check for 3 large enough blue or orange patches in the middle of screen to indicate round start
+def is_round_start_screen(frame, settings_icon):
+    if check_for_settings_icon(frame, settings_icon):
+        middle_section = frame[70:120, 900:1020]
+
+        time = read_text(middle_section, time_config, 100, cv2.THRESH_BINARY_INV)
+        if time == "0:00":
+            usernames_section = frame[800:890, 90:1830]
+            return round_start_color_check(usernames_section, lower_orange, upper_orange) \
+                       or round_start_color_check(usernames_section, lower_blue, upper_blue)
+
+    return False
+
+
+# reads image using image_to_string with the given config string,
+# gray_thresh_lower_bound being the lower limit of filter and thresh_type being the thresh type
+def read_text(image_text, config, gray_thresh_lower_bound, thresh_type):
+    gray_text = cv2.cvtColor(image_text, cv2.COLOR_BGR2GRAY)
+    thresh_text = cv2.threshold(gray_text, gray_thresh_lower_bound, 255, thresh_type)[1]
+    text = pytesseract.image_to_string(thresh_text, config=config)
+    return text
 
 # checks that timestamp read from image is the correct format (e.g. 0:45)
 def validate_timestamp(time):
     return re.search("[0-9]:[0-9]{2}", time)
-#
-#
+
+
 # for refPath in paths.list_images(args["ref"]):
 #     # load image, resize, and convert to grayscale
 #     ref = cv2.imread(refPath)
@@ -362,23 +385,30 @@ def validate_timestamp(time):
 #     # cv2.imshow(refPath, thresh)
 #     # cv2.waitKey(0)
 #
+# settings_icon = cv2.imread(args["settings"])
+#
 #
 # for imagePath in paths.list_images(args["images"]):
 #     # load image, resize, and convert to grayscale
 #     image = cv2.imread(imagePath)
 #     image = cv2.resize(image, (1920, 1080))
-#     # check_character_select(image, image)
-#
-#
-#     check_kill_feed(image)
-#
-#     kfes = read_kill_feed(image, [])
-#     scoreboard = read_scoreboard(image)
-#     for kf in kfes:
-#         kf.scoreboard_readout = scoreboard
-#         print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
-#               kf.death.desc + "team at " + kf.scoreboard_readout.time + ", with the score of blue:" +
-#               kf.scoreboard_readout.blue_score + " vs orange:" + kf.scoreboard_readout.orange_score)
-#
-#     cv2.imshow(imagePath, image)
-#     cv2.waitKey(0)
+#     # if not player_list and scoreboard_scanner.is_scoreboard(image):
+#     #     player_list = scoreboard_scanner.read_scoreboard(image)
+#     #     print(player_list)
+#     # check_character_select(image, settings_icon)
+#     if is_round_start_screen(image, settings_icon):
+#         print("round start")
+#     #
+#     #
+#     # check_kill_feed(image)
+#     #
+#     # kfes = read_kill_feed(image, [])
+#     # scoreboard = read_scoreboard(image)
+#     # for kf in kfes:
+#     #     kf.scoreboard_readout = scoreboard
+#     #     print(kf.kill.name + " on the " + kf.kill.desc + "team killed " + kf.death.name + " on the " +
+#     #           kf.death.desc + "team at " + kf.scoreboard_readout.time + ", with the score of blue:" +
+#     #           kf.scoreboard_readout.blue_score + " vs orange:" + kf.scoreboard_readout.orange_score)
+#     #
+#     # cv2.imshow(imagePath, image)
+#     # cv2.waitKey(0)
