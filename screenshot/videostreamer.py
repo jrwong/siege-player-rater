@@ -6,15 +6,15 @@ from queue import Queue
 
 # mostly taken from https://github.com/DanielTea/rage-analytics/blob/master/engine/realtime_VideoStreamer.py
 class VideoStreamer:
-    def __init__(self, twitch_url, queueSize=128, resolution='1080p60', n_frame=30):
+    def __init__(self, twitch_url: object, queue_size: object = 128, resolution: object = '1080p60', sample_freq: object = 0.5) -> object:
         self.stopped = False
         self.twitch_url = twitch_url
         self.res = resolution
-        self.n_frame = n_frame
+        self.sample_freq = sample_freq
 
         # initialize the queue used to store frames read from
         # the video stream
-        self.Q = Queue(maxsize=queueSize)
+        self.Q = Queue(maxsize=queue_size)
         checkIfStreamsWorks = self.create_pipe()
 
         if checkIfStreamsWorks:
@@ -35,9 +35,11 @@ class VideoStreamer:
 
         #print("available streams: "+ str(streams))
 
-        resolutions = {'360p': {"byte_lenght": 640, "byte_width": 360}, '480p': {"byte_lenght": 854, "byte_width": 480},
-                       '720p': {"byte_lenght": 1280, "byte_width": 720}, '1080p': {"byte_lenght": 1920, "byte_width": 1080},
-                       '1080p60': {"byte_lenght": 1920, "byte_width": 1080}}
+        # priority is highest resolution, and higher fps stream takes next
+        resolutions = {'1080p60': {"byte_length": 1920, "byte_width": 1080}, '1080p': {"byte_length": 1920, "byte_width": 1080},
+                       '720p60': {"byte_length": 1280, "byte_width": 720}, '720p': {"byte_length": 1280, "byte_width": 720},
+                       '480p': {"byte_length": 854, "byte_width": 480}, '360p': {"byte_length": 640, "byte_width": 360}
+                       }
 
 
         if self.res in streams:
@@ -48,11 +50,17 @@ class VideoStreamer:
                     print("USED FALL BACK " + key)
                     finalRes = key
                     break
-            else: # https://docs.python.org/2/tutorial/controlflow.html#break-and-continue-statements-and-else-clauses-on-loops
+            else:
                 print("COULD NOT FIND STREAM " + streamer_name)
                 return False
 
-        self.byte_lenght = resolutions[finalRes]["byte_lenght"]
+        if 'p60' in finalRes:
+            self.n_frame = round(60*self.sample_freq)
+            print('60fps, sampling every ' + str(self.n_frame) + ' frames')
+        else:
+            self.n_frame = round(30*self.sample_freq)
+            print('30fps, sampling every ' + str(self.n_frame) + ' frames')
+        self.byte_length = resolutions[finalRes]["byte_length"]
         self.byte_width = resolutions[finalRes]["byte_width"]
 
         print("FINAL RES " + finalRes + " " + streamer_name)
@@ -83,11 +91,11 @@ class VideoStreamer:
         while True:
 
             raw_image = self.pipe.stdout.read(
-                self.byte_lenght * self.byte_width * 3)  # read length*width*3 bytes (= 1 frame)
+                self.byte_length * self.byte_width * 3)  # read length*width*3 bytes (= 1 frame)
 
             if count_frame % self.n_frame == 0:
 
-                frame = numpy.fromstring(raw_image, dtype='uint8').reshape((self.byte_width, self.byte_lenght, 3))
+                frame = numpy.fromstring(raw_image, dtype='uint8').reshape((self.byte_width, self.byte_length, 3))
 
                 if not self.Q.full():
                     self.Q.put(frame)
