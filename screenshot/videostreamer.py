@@ -1,3 +1,4 @@
+import ffmpeg
 import streamlink
 import numpy
 from threading import Thread
@@ -5,12 +6,16 @@ import subprocess as sp
 from queue import Queue
 
 # mostly taken from https://github.com/DanielTea/rage-analytics/blob/master/engine/realtime_VideoStreamer.py
+
+
 class VideoStreamer:
-    def __init__(self, twitch_url: object, queue_size: object = 128, resolution: object = '1080p60', sample_freq: object = 0.5) -> object:
+    def __init__(self, url: object, is_stream: object, queue_size: object = 128, resolution: object = '1080p60',
+                 sample_freq: object = 0.5) -> object:
         self.stopped = False
-        self.twitch_url = twitch_url
+        self.url = url
         self.res = resolution
         self.sample_freq = sample_freq
+        self.is_stream = is_stream
 
         # initialize the queue used to store frames read from
         # the video stream
@@ -21,54 +26,61 @@ class VideoStreamer:
             self.start_buffer()
 
     def create_pipe(self):
-        streamer_name = self.twitch_url.split("/")[3]
+        if self.is_stream:
+            streamer_name = self.url.split("/")[3]
 
 
-        try:
-            streams = streamlink.streams(self.twitch_url)
-        except streamlink.exceptions.NoPluginError:
-            print("NO STREAM AVAILABLE for " + streamer_name)
-            return False
-        except:
-            print("NO STREAM AVAILABLE no exception " + streamer_name)
-            return False
-
-        #print("available streams: "+ str(streams))
-
-        # priority is highest resolution, and higher fps stream takes next
-        resolutions = {'1080p60': {"byte_length": 1920, "byte_width": 1080}, '1080p': {"byte_length": 1920, "byte_width": 1080},
-                       '720p60': {"byte_length": 1280, "byte_width": 720}, '720p': {"byte_length": 1280, "byte_width": 720},
-                       '480p': {"byte_length": 854, "byte_width": 480}, '360p': {"byte_length": 640, "byte_width": 360}
-                       }
-
-
-        if self.res in streams:
-            finalRes = self.res
-        else:
-            for key in resolutions:
-                if key != self.res and key in streams:
-                    print("USED FALL BACK " + key)
-                    finalRes = key
-                    break
-            else:
-                print("COULD NOT FIND STREAM " + streamer_name)
+            try:
+                streams = streamlink.streams(self.url)
+            except streamlink.exceptions.NoPluginError:
+                print("NO STREAM AVAILABLE for " + streamer_name)
+                return False
+            except:
+                print("NO STREAM AVAILABLE no exception " + streamer_name)
                 return False
 
-        if 'p60' in finalRes:
-            self.n_frame = round(60*self.sample_freq)
-            print('60fps, sampling every ' + str(self.n_frame) + ' frames')
+            #print("available streams: "+ str(streams))
+
+            # priority is highest resolution, and higher fps stream takes next
+            resolutions = {'1080p60': {"byte_length": 1920, "byte_width": 1080}, '1080p': {"byte_length": 1920, "byte_width": 1080},
+                           '720p60': {"byte_length": 1280, "byte_width": 720}, '720p': {"byte_length": 1280, "byte_width": 720},
+                           '480p': {"byte_length": 854, "byte_width": 480}, '360p': {"byte_length": 640, "byte_width": 360}
+                           }
+
+
+            if self.res in streams:
+                finalRes = self.res
+            else:
+                for key in resolutions:
+                    if key != self.res and key in streams:
+                        print("USED FALL BACK " + key)
+                        finalRes = key
+                        break
+                else:
+                    print("COULD NOT FIND STREAM " + streamer_name)
+                    return False
+
+            if 'p60' in finalRes:
+                self.n_frame = round(60*self.sample_freq)
+                print('60fps, sampling every ' + str(self.n_frame) + ' frames')
+            else:
+                self.n_frame = round(30*self.sample_freq)
+                print('30fps, sampling every ' + str(self.n_frame) + ' frames')
+            self.byte_length = resolutions[finalRes]["byte_length"]
+            self.byte_width = resolutions[finalRes]["byte_width"]
+
+            print("FINAL RES " + finalRes + " " + streamer_name)
+
+            stream = streams[finalRes]
+            stream_url = stream.url
         else:
-            self.n_frame = round(30*self.sample_freq)
-            print('30fps, sampling every ' + str(self.n_frame) + ' frames')
-        self.byte_length = resolutions[finalRes]["byte_length"]
-        self.byte_width = resolutions[finalRes]["byte_width"]
+            self.byte_length = 2560
+            self.byte_width = 1440
+            self.n_frame = round(60*self.sample_freq)
+            stream_url = self.url
 
-        print("FINAL RES " + finalRes + " " + streamer_name)
 
-        stream = streams[finalRes]
-        self.stream_url = stream.url
-
-        self.pipe = sp.Popen(['ffmpeg', "-i", self.stream_url,
+        self.pipe = sp.Popen(['ffmpeg', "-i", stream_url,
                               "-loglevel", "quiet",  # no text output
                               "-an",  # disable audio
                               "-f", "image2pipe",

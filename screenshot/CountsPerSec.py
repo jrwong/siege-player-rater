@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 # pulled from https://github.com/nrsyed/computer-vision/blob/master/multithread/CountsPerSec.py
 class CountsPerSec:
     """
