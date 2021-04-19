@@ -59,7 +59,7 @@ def read_colormasked_areas_scoreboard(input_image, lower_color, upper_color):
         (x, y, w, h) = cv2.boundingRect(c)
 
         # if we have a blue or orange bar more than 1000 pixels across, it's probably the scoreboard
-        if w > 800:
+        if w > 1300:
             # img_box = cv2.rectangle(input_image, (x, y), (x+w, y+h), color=(255, 0, 0), thickness=2)
             # cv2.imshow("img_box", img_box)
             # cv2.waitKey(0)
@@ -75,9 +75,11 @@ def read_colormasked_areas_scoreboard_check(input_image, lower_color, upper_colo
 
     for (i, c) in enumerate(cnts):
         (x, y, w, h) = cv2.boundingRect(c)
-
+        # img_box = cv2.rectangle(input_image, (x, y), (x+w, y+h), color=(0, 255, 0), thickness=2)
+        # cv2.imshow("img_box", img_box)
+        # cv2.waitKey(0)
         # if we have a blue or orange bar more than 1000 pixels across, it's probably the scoreboard
-        if w > 800:
+        if w > 1300:
             return True
 
     return False
@@ -104,7 +106,7 @@ def find_color_contours(input_image, lower_color, upper_color):
 #     image = cv2.imread(imagePath)
 #     image = cv2.resize(image, (1920,1080))
 #
-#     read_scoreboard(image)
+#     # read_scoreboard(image)
 #     if not player_list and is_scoreboard(image):
 #         player_list = read_scoreboard(image)
 #         print(player_list)

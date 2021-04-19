@@ -317,20 +317,23 @@ def check_for_settings_icon(input_image, reference_image):
     return left_score > 10000000
 
 
+def check_for_infinity_symbol(input_image, reference_image):
+    infinity_section = input_image[60:110, 900:1020]
+    left_result = cv2.matchTemplate(infinity_section, reference_image, cv2.TM_CCOEFF)
+    (_, left_score, _, _) = cv2.minMaxLoc(left_result)
+    # from testing, seems like the limit is about 10 million with 15 million being ideal. will modify later
+    return left_score > 10000000
+
+
 # checks to indicate round start
 # 1. check for settings icon in the proper location
-# 2. check for time to be 0
+# 2. check for time to be infinity symbol
 # 3. check for 3 large enough blue or orange patches in the middle of screen to indicate round start
-def is_round_start_screen(frame, settings_icon):
-    if check_for_settings_icon(frame, settings_icon):
-        middle_section = frame[70:120, 900:1020]
-
-        time = read_text(middle_section, time_config, 100, cv2.THRESH_BINARY_INV)
-
-        if time == "0:00":
-            usernames_section = frame[740:890, 90:1830]
-            return round_start_color_check(usernames_section, lower_orange, upper_orange) \
-                       or round_start_color_check(usernames_section, lower_blue, upper_blue)
+def is_round_start_screen(frame, settings_icon, infinity_symbol):
+    if check_for_settings_icon(frame, settings_icon) and check_for_infinity_symbol(frame, infinity_symbol):
+        usernames_section = frame[740:890, 90:1830]
+        return round_start_color_check(usernames_section, lower_orange, upper_orange) \
+                   or round_start_color_check(usernames_section, lower_blue, upper_blue)
 
     return False
 

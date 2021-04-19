@@ -1,9 +1,5 @@
-import customfilevideostream
 from imutils.video import FPS
 from imutils import paths
-from customfilevideostream import CustomFileVideoStream
-from imutils.video import FileVideoStream
-import streamlink
 import time
 import cv2
 from videostreamer import VideoStreamer
@@ -21,8 +17,9 @@ ap.add_argument("-db", "--debug", help="debug mode")
 ap.add_argument("-dbo", "--debugOutput", help="kill feed screen shot output file")
 args = vars(ap.parse_args())
 
-
+# preload basic images for template comparison
 for refPath in paths.list_images(args["ref"]):
+    # TODO: move this load images to its own method, add filename check
     # load image, resize, and convert to grayscale
     ref = cv2.imread(refPath)
     ref = cv2.cvtColor(ref, cv2.COLOR_BGR2GRAY)
@@ -48,6 +45,9 @@ for refPath in paths.list_images(args["ref"]):
     if "settings_icon" in refPath:
         settings_icon = cv2.imread(refPath)
 
+    if "infinity_symbol" in refPath:
+        infinity_symbol = cv2.imread(refPath)
+
 
 if args["source"]:
     is_stream = False
@@ -56,7 +56,7 @@ else:
     is_stream = True
     source_url = 'https://www.twitch.tv/easilyyr6'
 
-debug_output_location=""
+debug_output_location = ""
 if args["debugOutput"]:
     debug_output_location = args["debugOutput"]
 
@@ -66,8 +66,7 @@ players = []
 player_dict = {}
 
 print("[INFO] starting video file thread...")
-# vs = CustomFileVideoStream(stream_url, sample_frequency).start()
-# fvs = FileVideoStream(stream_url).start()
+# TODO: create properties file for configs
 vs = VideoStreamer(url=source_url, is_stream=is_stream, queue_size=128, sample_freq=0.5)
 time.sleep(10.0)
 
@@ -86,7 +85,8 @@ while True:
             players = scoreboard_scanner.read_scoreboard(curr_frame)
             print(players)
 
-        elif screenshot_scanner.is_round_start_screen(curr_frame, settings_icon):
+        # TODO: fix is_round_start_screen for current season
+        elif screenshot_scanner.is_round_start_screen(curr_frame, settings_icon, infinity_symbol):
             old_round_number = 0
             if round_context.round_score is not None:
                 old_round_number = round_context.round_score['orange'] + round_context.round_score['blue']

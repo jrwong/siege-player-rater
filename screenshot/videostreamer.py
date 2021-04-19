@@ -83,6 +83,8 @@ class VideoStreamer:
         self.pipe = sp.Popen(['ffmpeg', "-i", stream_url,
                               "-loglevel", "quiet",  # no text output
                               "-an",  # disable audio
+                              # "-filter:v \"select='not(mod(n\,10))',setpts=N/30/TB\"",  # pick every 10 frames
+                              # "-framerate 60",
                               "-f", "image2pipe",
                               "-pix_fmt", "bgr24",
                               "-vcodec", "rawvideo", "-"],
